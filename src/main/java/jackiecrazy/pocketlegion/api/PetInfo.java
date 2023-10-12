@@ -105,7 +105,7 @@ public class PetInfo {
     }
 
     public Entity getOrCreateManifestation(Level world) {
-        return manifestation != null && manifestation.level == world && !manifestation.isRemoved() ? manifestation : summon(world);
+        return manifestation != null && manifestation.level() == world && !manifestation.isRemoved() ? manifestation : summon(world);
     }
 
     public Entity getManifestation(){
@@ -148,7 +148,7 @@ public class PetInfo {
     public void dismiss() {
         if (manifestation != null) {
             updatePet(manifestation);
-            if(manifestation.level instanceof ServerLevel s){
+            if(manifestation.level() instanceof ServerLevel s){
                 s.sendParticles(ParticleTypes.PORTAL, manifestation.getX(), manifestation.getY(), manifestation.getZ(), 30, 0, 0, 0, 1);
             }
             manifestation.remove(Entity.RemovalReason.DISCARDED);

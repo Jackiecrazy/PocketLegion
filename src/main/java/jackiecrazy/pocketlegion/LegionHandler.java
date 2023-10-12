@@ -43,10 +43,10 @@ public class LegionHandler {
 
     @SubscribeEvent
     public static void test(LivingAttackEvent event) {
-        if (event.getSource().getEntity() instanceof Player p && p.getMainHandItem().getItem() instanceof BannerItem banner && !p.level.isClientSide()) {
+        if (event.getSource().getEntity() instanceof Player p && p.getMainHandItem().getItem() instanceof BannerItem banner && !p.level().isClientSide()) {
             LazyOptional<ICommander> sum = p.getCapability(Capabilities.COMMANDER, null);
             sum.ifPresent(a -> {
-                a.summon(banner.getColor(), p, p.level);
+                a.summon(banner.getColor(), p, p.level());
             });
         }
 
@@ -56,10 +56,11 @@ public class LegionHandler {
     public static void interact(PlayerInteractEvent.EntityInteract e) {
         if (e.getTarget() instanceof OwnableEntity ownable && e.getEntity().getMainHandItem().getItem() instanceof BannerItem banner) {
             Entity entity = e.getTarget();
-            if (ownable.getOwner() == e.getEntity() && entity instanceof LivingEntity pet && ownable.getOwner() instanceof LivingEntity owner) {
+            if (ownable.getOwner() == e.getEntity() && entity instanceof LivingEntity pet && ownable.getOwner() !=null) {
+                LivingEntity owner=ownable.getOwner();
                 LazyOptional<ICommander> sum = ownable.getOwner().getCapability(Capabilities.COMMANDER, null);
                 LazyOptional<ISummon> cap = e.getTarget().getCapability(Capabilities.PET, null);
-                if (cap.isPresent() && cap.resolve().get().getSummoner(pet.level) != null && cap.resolve().get().getSummoner(pet.level) != owner) {
+                if (cap.isPresent() && cap.resolve().get().getSummoner(pet.level()) != null && cap.resolve().get().getSummoner(pet.level()) != owner) {
                     e.getEntity().displayClientMessage(Component.translatable("pocketlegion.another"), true);
                     return;
                 }
@@ -142,7 +143,7 @@ public class LegionHandler {
     public static void dismissal(LivingEvent.LivingTickEvent e) {
         LazyOptional<ISummon> sum = e.getEntity().getCapability(Capabilities.PET, null);
         sum.ifPresent(a -> {
-            if (a.getInfo() != null && (a.getSummoner(e.getEntity().level) == null || !a.getSummoner(e.getEntity().level).isAlive())) {
+            if (a.getInfo() != null && (a.getSummoner(e.getEntity().level()) == null || !a.getSummoner(e.getEntity().level()).isAlive())) {
                 a.getInfo().dismiss();
             }
         });

@@ -149,7 +149,7 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
                         p.displayClientMessage(Component.translatable("pocketlegion.revived", pet.getName(), color.getName()), true);
                 }
 
-                if (sneakTime > 0 && pet.getManifestation() != null && pet.getManifestation().level instanceof ServerLevel s) {
+                if (sneakTime > 0 && pet.getManifestation() != null && pet.getManifestation().level() instanceof ServerLevel s) {
                     s.sendParticles(ParticleTypes.PORTAL, pet.getManifestation().getX(), pet.getManifestation().getY(), pet.getManifestation().getZ(), 1, 0, 0, 0, 1);
                 }
             }
@@ -157,7 +157,7 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
 
         if (commander.isShiftKeyDown() && commander.getMainHandItem().getItem() instanceof BannerItem banner) {
             if (++sneakTime > 60) {
-                commander.level.playSound(null, commander.getX(), commander.getY(), commander.getZ(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 1f, 1f);
+                commander.level().playSound(null, commander.getX(), commander.getY(), commander.getZ(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 1f, 1f);
                 dismiss(banner.getColor());
                 sneakTime = -Integer.MAX_VALUE;
             }
@@ -179,7 +179,7 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
                     mob.getNavigation().moveTo(x, y, z, 1);
             } else {
                 e.teleportTo(x, y, z);
-                if (e.level instanceof ServerLevel s) {
+                if (e.level() instanceof ServerLevel s) {
                     s.sendParticles(ParticleTypes.REVERSE_PORTAL, e.getX(), e.getY(), e.getZ(), 30, 0, 0, 0, 1);
                 }
                 if (e instanceof Mob mob)
@@ -189,17 +189,17 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
         }
     }
 
-    private boolean canTeleportTo(Entity pet, BlockPos pos) {
-        BlockPathTypes blockpathtypes = WalkNodeEvaluator.getBlockPathTypeStatic(pet.level, pos.mutable());
+    private boolean canTeleportTo(@NotNull Entity pet, BlockPos pos) {
+        BlockPathTypes blockpathtypes = WalkNodeEvaluator.getBlockPathTypeStatic(pet.level(), pos.mutable());
         if (blockpathtypes != BlockPathTypes.WALKABLE) {
             return false;
         } else {
-            BlockState blockstate = pet.level.getBlockState(pos.below());
+            BlockState blockstate = pet.level().getBlockState(pos.below());
             if (blockstate.getBlock() instanceof LeavesBlock) {
                 return false;
             } else {
                 BlockPos blockpos = pos.subtract(pet.blockPosition());
-                return pet.level.noCollision(pet, pet.getBoundingBox().move(blockpos));
+                return pet.level().noCollision(pet, pet.getBoundingBox().move(blockpos));
             }
         }
     }
