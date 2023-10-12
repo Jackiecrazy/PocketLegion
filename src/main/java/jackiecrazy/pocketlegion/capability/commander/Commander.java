@@ -22,6 +22,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BannerItem;
+import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -36,22 +38,32 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Commander implements ICommander, ICapabilitySerializable<CompoundTag>, ICapabilityProvider {
-    private final ArrayList<PetInfo> legion = new ArrayList<>();
+    private final HashMap<DyeColor, List<PetInfo>> legions = new HashMap<>();
     private int sneakTime = 0;
 
     @Override
-    public List<PetInfo> getLegion() {
-        return legion;
+    public Map<DyeColor, List<PetInfo>> getAllLegions() {
+        for (DyeColor color : DyeColor.values())
+            legions.putIfAbsent(color, new ArrayList<>());
+        return legions;
     }
 
     @Override
-    public void summon(LivingEntity commander, Level world) {
-        for (PetInfo pet : legion) {
-            if(pet.invalid()){
-                PocketLegion.LOGGER.error("legion member "+pet.getName()+ " is invalid!");
+    public List<PetInfo> getLegion(DyeColor color) {
+        legions.putIfAbsent(color, new ArrayList<>());
+        return legions.get(color);
+    }
+
+    @Override
+    public void summon(DyeColor color, LivingEntity commander, Level world) {
+        for (PetInfo pet : getLegion(color)) {
+            if (pet.invalid()) {
+                PocketLegion.LOGGER.error("legion member " + pet.getName() + " is invalid!");
             }
             if (pet.getKiller() instanceof LivingEntity elb) {
                 elb.addEffect(new MobEffectInstance(MobEffects.GLOWING, 100));
@@ -77,22 +89,22 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
     }
 
     @Override
-    public void dismiss() {
-        for (PetInfo pet : legion) {
+    public void dismiss(DyeColor color) {
+        for (PetInfo pet : getLegion(color)) {
             pet.dismiss();
         }
     }
 
     @Override
-    public PetInfo add(LivingEntity member, LivingEntity commander) {
+    public PetInfo add(LivingEntity member, DyeColor color, LivingEntity commander) {
         final PetInfo e = new PetInfo(member, commander);
-        legion.add(e);
+        legions.get(color).add(e);
         return e;
     }
 
     @Override
-    public void remove(LivingEntity member) {
-        if (legion.removeIf(a -> a.getManifestation() == member)) {
+    public void remove(LivingEntity member, DyeColor color) {
+        if (getLegion(color).removeIf(a -> a.getManifestation() == member)) {
             LazyOptional<ISummon> sum = member.getCapability(Capabilities.PET, null);
             sum.ifPresent(a -> {
                 a.setInfo(null);
@@ -103,43 +115,51 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
 
     @Override
     public CompoundTag write(CompoundTag tag) {
-        ListTag list = new ListTag();
-        for (PetInfo pet : getLegion()) {
-            list.add(pet.write(new CompoundTag()));
+        for (DyeColor color : DyeColor.values()) {
+            ListTag list = new ListTag();
+            for (PetInfo pet : getLegion(color)) {
+                list.add(pet.write(new CompoundTag()));
+            }
+            tag.put(color.getName(), list);
         }
-        tag.put("legion", list);
         return tag;
     }
 
     @Override
     public void read(CompoundTag from) {
-        legion.clear();
-        ListTag list = from.getList("legion", CompoundTag.TAG_COMPOUND);
-        for (int a = 0; a < list.size(); a++) {
-            CompoundTag ct = list.getCompound(a);
-            legion.add(PetInfo.read(ct));
+        legions.clear();
+        for (DyeColor d : DyeColor.values()) {
+            ListTag list = from.getList(d.getName(), CompoundTag.TAG_COMPOUND);
+            for (int a = 0; a < list.size(); a++) {
+                CompoundTag ct = list.getCompound(a);
+                getLegion(d).add(PetInfo.read(ct));
+            }
         }
     }
 
     @Override
     public void tick(LivingEntity commander) {
-        for (PetInfo pet : legion) {
-            if ((pet.getKiller() == null || !pet.getKiller().isAlive()) && pet.decrementKillTimer() && commander instanceof Player p) {
-                boolean all = legion.stream().noneMatch(a -> a.getKillTimer() > 0);
-                if (all)
-                    p.displayClientMessage(Component.translatable("pocketlegion.revived.all"), true);
-                else p.displayClientMessage(Component.translatable("pocketlegion.revived", pet.getName()), true);
-            }
+        getAllLegions().forEach((color, pets) -> {
+            for (PetInfo pet : pets) {
+                if ((pet.getKiller() == null || !pet.getKiller().isAlive()) && pet.decrementKillTimer() && commander instanceof Player p) {
+                    boolean all = pets.stream().noneMatch(a -> a.getKillTimer() > 0);
+                    if (all)
+                        p.displayClientMessage(Component.translatable("pocketlegion.revived.all", color.getName()), true);
+                    else
+                        p.displayClientMessage(Component.translatable("pocketlegion.revived", pet.getName(), color.getName()), true);
+                }
 
-            if (sneakTime > 0 && pet.getManifestation() != null && pet.getManifestation().level instanceof ServerLevel s) {
-                s.sendParticles(ParticleTypes.PORTAL, pet.getManifestation().getX(), pet.getManifestation().getY(), pet.getManifestation().getZ(), 1, 0, 0, 0, 1);
+                if (sneakTime > 0 && pet.getManifestation() != null && pet.getManifestation().level instanceof ServerLevel s) {
+                    s.sendParticles(ParticleTypes.PORTAL, pet.getManifestation().getX(), pet.getManifestation().getY(), pet.getManifestation().getZ(), 1, 0, 0, 0, 1);
+                }
             }
-        }
-        if (commander.isShiftKeyDown() && commander.getMainHandItem().is(ItemTags.BANNERS)) {
+        });
+
+        if (commander.isShiftKeyDown() && commander.getMainHandItem().getItem() instanceof BannerItem banner) {
             if (++sneakTime > 60) {
                 commander.level.playSound(null, commander.getX(), commander.getY(), commander.getZ(), SoundEvents.ITEM_PICKUP, SoundSource.PLAYERS, 1f, 1f);
-                dismiss();
-                sneakTime=-Integer.MAX_VALUE;
+                dismiss(banner.getColor());
+                sneakTime = -Integer.MAX_VALUE;
             }
         } else sneakTime = 0;
     }

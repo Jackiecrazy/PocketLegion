@@ -1,7 +1,10 @@
 {
-  "pocketlegion.added": "this entity is now part of your legion",
-  "pocketlegion.already": "this entity is already in a legion",
-  "pocketlegion.revived": "%s has recovered",
-  "pocketlegion.revived.all": "all members of your legion have recovered"
+  "pocketlegion.added": "this entity is now part of Squad %s",
+  "pocketlegion.already": "this entity is already in this squad",
+  "pocketlegion.another": "this entity belongs to another legion",
+  "pocketlegion.revived": "%s in Squad %s has recovered",
+  "pocketlegion.revived.all": "all members of Squad %s have recovered",
+  "pocketlegion.legion": "legion",
+  "pocketlegion.revived.all.all": "all members of your legion have recovered"
 
 }
