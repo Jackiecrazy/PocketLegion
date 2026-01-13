@@ -29,6 +29,7 @@ public class PetInfo {
     private WeakReference<Entity> killer = new WeakReference<>(null);
     private LivingEntity summoner;
     private UUID summonerUID;
+    private boolean fresh;
 
     private PetInfo() {
 
@@ -48,6 +49,13 @@ public class PetInfo {
         ret.incarnation = tag.getInt("incarnation");
         ret.summonerUID = tag.getUUID("owner");
         return ret;
+    }
+
+    public void freshen() {
+        if (fresh && manifestation != null) {
+            fresh = false;
+            manifestation.setOldPosAndRot();
+        }
     }
 
     public void updatePet(Entity now) {
@@ -88,7 +96,7 @@ public class PetInfo {
         return summoner;
     }
 
-    public Component getName(){
+    public Component getName() {
         if (pet.contains("CustomName", 8)) {
             String s = pet.getString("CustomName");
 
@@ -108,7 +116,7 @@ public class PetInfo {
         return manifestation != null && manifestation.level() == world && !manifestation.isRemoved() ? manifestation : summon(world);
     }
 
-    public Entity getManifestation(){
+    public Entity getManifestation() {
         return manifestation;
     }
 
@@ -140,6 +148,7 @@ public class PetInfo {
             }
             manifestation = entity;
             world.addFreshEntity(entity);
+            fresh = true;
             return entity;
         }
         return null;
@@ -148,7 +157,7 @@ public class PetInfo {
     public void dismiss() {
         if (manifestation != null) {
             updatePet(manifestation);
-            if(manifestation.level() instanceof ServerLevel s){
+            if (manifestation.level() instanceof ServerLevel s) {
                 s.sendParticles(ParticleTypes.PORTAL, manifestation.getX(), manifestation.getY(), manifestation.getZ(), 30, 0, 0, 0, 1);
             }
             manifestation.remove(Entity.RemovalReason.DISCARDED);

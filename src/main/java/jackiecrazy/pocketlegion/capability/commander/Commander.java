@@ -45,6 +45,7 @@ import java.util.Map;
 public class Commander implements ICommander, ICapabilitySerializable<CompoundTag>, ICapabilityProvider {
     private final HashMap<DyeColor, List<PetInfo>> legions = new HashMap<>();
     private int sneakTime = 0;
+    private boolean fresh=false;
 
     @Override
     public Map<DyeColor, List<PetInfo>> getAllLegions() {
@@ -69,7 +70,7 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
                 elb.addEffect(new MobEffectInstance(MobEffects.GLOWING, 100));
             }
             final Entity manifestation = pet.getOrCreateManifestation(world);
-            if (manifestation != null) {
+            if (manifestation != null&&(!(manifestation instanceof Mob m)||m.getTarget()==null)) {
                 BlockPos blockpos = commander.blockPosition();
                 boolean flag = false;
                 for (int i = 0; i < 10; ++i) {
@@ -84,6 +85,7 @@ public class Commander implements ICommander, ICapabilitySerializable<CompoundTa
                 if (!flag) {
                     manifestation.setPos(commander.position());
                 }
+                pet.freshen();
             }
         }
     }
