@@ -1,22 +1,31 @@
 package jackiecrazy.pocketlegion;
 
+import jackiecrazy.pocketlegion.ai.GuardGoal;
 import jackiecrazy.pocketlegion.api.PetInfo;
 import jackiecrazy.pocketlegion.capability.Capabilities;
 import jackiecrazy.pocketlegion.capability.commander.Commander;
 import jackiecrazy.pocketlegion.capability.commander.ICommander;
 import jackiecrazy.pocketlegion.capability.summon.ISummon;
 import jackiecrazy.pocketlegion.capability.summon.Summon;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.goal.FollowOwnerGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BannerItem;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.BannerBlock;
 import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.event.AttachCapabilitiesEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
@@ -50,22 +59,59 @@ public class LegionHandler {
             if (event.getSource().getEntity() instanceof Player p && p.getMainHandItem().getItem() instanceof BannerItem banner && !p.level().isClientSide()) {
                 LazyOptional<ICommander> sum = p.getCapability(Capabilities.COMMANDER, null);
                 sum.ifPresent(a -> {
-                    a.summon(banner.getColor(), p, p.level());
-                    a.shiftAggro(banner.getColor(), event.getEntity());
+                    final DyeColor color = banner.getColor();
+                    a.follow(color);
+                    a.summon(color, p, p.level());
+                    a.shiftAggro(color, event.getEntity());
                 });
             } else if (event.getEntity() instanceof Player p && !p.level().isClientSide()) {
                 LazyOptional<ICommander> sum = p.getCapability(Capabilities.COMMANDER, null);
                 sum.ifPresent(a -> {
                     if (p.getMainHandItem().getItem() instanceof BannerItem banner) {
-                        a.summon(banner.getColor(), p, p.level());
-                        a.shiftAggro(banner.getColor(), e);
+                        final DyeColor color = banner.getColor();
+                        a.follow(color);
+                        a.summon(color, p, p.level());
+                        a.shiftAggro(color, e);
                     }
                     if (p.getOffhandItem().getItem() instanceof BannerItem banner) {
-                        a.summon(banner.getColor(), p, p.level());
-                        a.shiftAggro(banner.getColor(), e);
+                        final DyeColor color = banner.getColor();
+                        a.follow(color);
+                        a.summon(color, p, p.level());
+                        a.shiftAggro(color, e);
                     }
                 });
             }
+        }
+    }
+
+    @SubscribeEvent
+    public static void justChill(PlayerInteractEvent.RightClickBlock e) {
+        if (!e.getLevel().isClientSide() && e.getHand() == InteractionHand.MAIN_HAND && e.getItemStack().isEmpty() && e.getLevel().getBlockState(e.getPos()).getBlock() instanceof BannerBlock b) {
+            LazyOptional<ICommander> sum = e.getEntity().getCapability(Capabilities.COMMANDER, null);
+            sum.ifPresent(a -> {
+                a.summon(b.getColor(), e.getEntity(), e.getLevel());
+                for (PetInfo p : a.getLegion(b.getColor())) {
+                    p.guard(e.getPos());
+                }
+            });
+            e.setCanceled(true);
+            e.setCancellationResult(InteractionResult.SUCCESS);
+        }
+    }
+
+    @SubscribeEvent
+    public static void justChill(PlayerInteractEvent.RightClickItem e) {
+        if (!e.getLevel().isClientSide() && e.getHand() == InteractionHand.MAIN_HAND && e.getItemStack().getItem() instanceof BannerItem b) {
+            LazyOptional<ICommander> sum = e.getEntity().getCapability(Capabilities.COMMANDER, null);
+            sum.ifPresent(a -> {
+                for (PetInfo p : a.getLegion(b.getColor())) {
+                    String status = p.getKillTimer() > 0 ? ChatFormatting.RED + "" : "";
+                    status = status.concat(p.getName().getString()) + ": " + p.getHealthForDisplay() + ChatFormatting.RESET;
+                    e.getEntity().displayClientMessage(Component.literal(status), false);
+                }
+            });
+            e.setCanceled(true);
+            e.setCancellationResult(InteractionResult.SUCCESS);
         }
     }
 
@@ -90,7 +136,7 @@ public class LegionHandler {
                         e.setResult(Event.Result.DENY);
                         return;
                     }
-                    if (commander.hasMember(pet))
+                    if (commander.hasMember(pet) && owner.isShiftKeyDown())
                         commander.remove(pet);
                     link = commander.add(pet, banner.getColor(), owner);
                 }
@@ -151,11 +197,11 @@ public class LegionHandler {
         sum.ifPresent(a -> {
             if (a.getInfo() != null) {
                 final LivingEntity summoner = a.getSummoner(dying.level());
+                a.getInfo().dismiss();
                 if (e.getSource().getEntity() instanceof LivingEntity s && s != summoner) {
                     a.getInfo().setKiller(s);
                 }
                 a.getInfo().setKillTimer(1200);
-                a.getInfo().dismiss();
                 if (summoner instanceof ServerPlayer sp) {
                     sp.displayClientMessage(e.getSource().getLocalizedDeathMessage(dying), false);
                 }

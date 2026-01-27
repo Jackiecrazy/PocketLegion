@@ -1,8 +1,10 @@
 package jackiecrazy.pocketlegion.api;
 
 import jackiecrazy.pocketlegion.PocketLegion;
+import jackiecrazy.pocketlegion.ai.GuardGoal;
 import jackiecrazy.pocketlegion.capability.Capabilities;
 import jackiecrazy.pocketlegion.capability.summon.ISummon;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -11,6 +13,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.goal.FollowOwnerGoal;
+import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraftforge.common.util.LazyOptional;
@@ -26,10 +31,12 @@ public class PetInfo {
     private boolean fullRevive;
     private int incarnation;
     private int killTimer;
+    private String healthString = "";
     private WeakReference<Entity> killer = new WeakReference<>(null);
     private LivingEntity summoner;
     private UUID summonerUID;
     private boolean fresh;
+    private FollowOwnerGoal fog;
 
     private PetInfo() {
 
@@ -48,6 +55,11 @@ public class PetInfo {
         ret.killTimer = tag.getInt("killTimer");
         ret.incarnation = tag.getInt("incarnation");
         ret.summonerUID = tag.getUUID("owner");
+        ret.healthString = tag.getString("health");
+//        ret.followRange = tag.getDouble("followR");
+//        ret.followSpeed = tag.getDouble("followS");
+//        ret.chillRange = tag.getDouble("chillR");
+//        ret.chillSpeed = tag.getDouble("chillS");
         return ret;
     }
 
@@ -55,6 +67,31 @@ public class PetInfo {
         if (fresh && manifestation != null) {
             fresh = false;
             manifestation.setOldPosAndRot();
+        }
+    }
+
+    public void guard(BlockPos pos) {
+        if (getManifestation() instanceof PathfinderMob m) {
+            for (WrappedGoal availableGoal : m.goalSelector.getAvailableGoals()) {
+                if (availableGoal.getGoal() instanceof FollowOwnerGoal fog) {
+                    this.fog = fog;
+                }
+            }
+            m.removeAllGoals(a->a instanceof FollowOwnerGoal);
+            m.goalSelector.addGoal(6, new GuardGoal(m, pos, 8, 1.0));
+        }
+    }
+
+    public void follow() {
+        if (getManifestation() instanceof PathfinderMob m) {
+            m.removeAllGoals(x -> x instanceof GuardGoal);
+            if(fog != null)
+            m.goalSelector.addGoal(6, fog);
+            else if(getManifestation()!=null){
+                Level lev=getManifestation().level();
+                dismiss();
+                summon(lev);
+            }
         }
     }
 
@@ -76,6 +113,7 @@ public class PetInfo {
     public boolean decrementKillTimer() {
         if (killTimer > 0 && --killTimer == 0) {
             fullRevive = true;
+            healthString="recovered";
             return true;
         }
         return false;
@@ -87,6 +125,8 @@ public class PetInfo {
 
     public void setKiller(Entity killer) {
         this.killer = new WeakReference<>(killer);
+        if(killer!=null)
+        healthString="recovering from "+getName(killer).getString();
     }
 
     public LivingEntity getSummoner(Level world) {
@@ -112,6 +152,14 @@ public class PetInfo {
         return type.map(EntityType::getDescription).orElseGet(Component::empty);
     }
 
+    private Component getName(Entity of) {
+        if(of==null)return Component.empty();
+        if (of.hasCustomName()) {
+            return of.getCustomName();
+        }
+        return of.getType().getDescription();
+    }
+
     public Entity getOrCreateManifestation(Level world) {
         return manifestation != null && manifestation.level() == world && !manifestation.isRemoved() ? manifestation : summon(world);
     }
@@ -122,9 +170,6 @@ public class PetInfo {
 
     public Entity summon(Level world) {
         Optional<EntityType<?>> type = EntityType.by(pet);
-        if (killTimer > 0) {
-            System.out.println("time to revive: " + killTimer / 20);
-        }
         if (type.isPresent() && killTimer <= 0) {
             Entity entity = type.get().create(world);
             assert entity != null;
@@ -149,9 +194,23 @@ public class PetInfo {
             manifestation = entity;
             world.addFreshEntity(entity);
             fresh = true;
+            if (manifestation instanceof LivingEntity le) {
+                healthString = le.getHealth() + "/" + le.getMaxHealth();
+            }
             return entity;
         }
         return null;
+    }
+
+    public String getHealthForDisplay() {
+        if(getKillTimer()>0){
+            String cd = (getKiller()==null||getKiller().isRemoved())?": "+getKillTimer()/20+" seconds left":"";
+            return healthString+cd;
+        }
+        if(getManifestation() instanceof LivingEntity le){
+            return le.getHealth() + "/" + le.getMaxHealth();
+        }
+        return healthString;
     }
 
     public void dismiss() {
@@ -161,6 +220,9 @@ public class PetInfo {
                 s.sendParticles(ParticleTypes.PORTAL, manifestation.getX(), manifestation.getY(), manifestation.getZ(), 30, 0, 0, 0, 1);
             }
             manifestation.remove(Entity.RemovalReason.DISCARDED);
+            if (manifestation instanceof LivingEntity le) {
+                healthString = le.getHealth() + "/" + le.getMaxHealth();
+            }
         }
         manifestation = null;
     }
@@ -170,6 +232,11 @@ public class PetInfo {
         tag.putInt("killTimer", killTimer);
         tag.putInt("incarnation", incarnation);
         tag.putUUID("owner", summonerUID);
+        tag.putString("health", healthString);
+//        tag.putDouble("followR", followRange);
+//        tag.putDouble("followS", followSpeed);
+//        tag.putDouble("chillR", chillRange);
+//        tag.putDouble("chillS", chillSpeed);
         return tag;
     }
 

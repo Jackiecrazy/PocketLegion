@@ -2,6 +2,7 @@ package jackiecrazy.pocketlegion.capability.commander;
 
 import jackiecrazy.pocketlegion.api.PetInfo;
 import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,6 +30,14 @@ public interface ICommander {
     default void dismiss() {
         for (DyeColor d : DyeColor.values())
             dismiss(d);
+    }
+
+    default void guard(DyeColor d, BlockPos bp){
+        getLegion(d).forEach(a->a.guard(bp));
+    }
+
+    default void follow(DyeColor d){
+        getLegion(d).forEach(PetInfo::follow);
     }
 
     //rules for aggro are simple:
